@@ -3,19 +3,51 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class FileSender : MonoBehaviour
 {
     public int port = 8888; // Port for the TCP server
     public string filePath = ""; // Path of the file to send
     public UIManager uiManager; // Reference to UIManager to update progress
-
+    public Text ipText;
+    
     private TcpListener server; // TCP server for listening to incoming connections
     private bool isServerRunning = false; // Whether the server is running or not
+    
+    void Start()
+    {
+        // Get the local IP address and update the IPText UI element
+        string localIP = GetLocalIPAddress();
+        ipText.text = "Server IP: " + localIP; // Display the IP on the UI
+
+        // Set default value in IP input field (optional, if you want to show the local IP initially)
+    }
 
     private void OnApplicationQuit()
     {
         StopServer(); // Stop the server when the application is closed
+    }
+    
+    public string GetLocalIPAddress()
+    {
+        string localIP = string.Empty;
+
+        // Get the host machine name
+        string hostName = Dns.GetHostName();
+
+        // Get the host entries associated with the machine name
+        foreach (var ip in Dns.GetHostAddresses(hostName))
+        {
+            // Check for IPv4 addresses
+            if (ip.AddressFamily == AddressFamily.InterNetwork)
+            {
+                localIP = ip.ToString();
+                break;
+            }
+        }
+
+        return localIP;
     }
 
     public void StartServer()
