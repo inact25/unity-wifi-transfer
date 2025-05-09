@@ -3,16 +3,17 @@ using UnityEngine;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using UnityEngine.UI; // Make sure to import this for Text and InputField
+using UnityEngine.UI; // Import this for Text, InputField, and Toggle
 
 public class FileReceiver : MonoBehaviour
 {
-    public string savePath; // Where the file will be saved
-    public string serverIP; // Default server IP
+    public string savePath; // Path to save the file (determined by toggle)
+    public string serverIP; // Server IP to connect to
     public int port = 8888; // Port of the server
-    public UIManager uiManager; // Reference to UIManager to update progress
-    public Text ipText; // Reference to the Text component for displaying IP
-    public InputField ipInputField; // Reference to the InputField for entering the IP address
+    public UIManager uiManager; // Reference to UIManager for progress updates
+    public Text ipText; // Text component to show the Receiver's IP
+    public InputField ipInputField; // InputField for entering the IP address
+    public Toggle useExternalStorageToggle; // Toggle for choosing storage path (Persistent or External)
 
     private TcpClient client; // Client to connect to the server
 
@@ -22,14 +23,11 @@ public class FileReceiver : MonoBehaviour
         string localIP = GetLocalIPAddress();
         ipText.text = "Receiver IP: " + localIP; // Display the IP on the UI
 
-        // Set default value in IP input field (optional, if you want to show the local IP initially)
+        // Set default value in IP input field (optional)
         ipInputField.text = "127.0.0.1";
 
-        // Set the save path to persistent data path
-        savePath = Path.Combine(Application.persistentDataPath, "received_file"); // Save in the persistent data path
-
-        // Optional: Log the save path for testing
-        Debug.Log("File will be saved to: " + savePath);
+        // Set default storage path (persistent storage)
+        SetSavePath();
     }
 
     // Method to get the local IP address of the device
@@ -54,6 +52,22 @@ public class FileReceiver : MonoBehaviour
         return localIP;
     }
 
+    // Method to set the save path based on the storage selection
+    public void SetSavePath()
+    {
+        // Check if the user selected External Storage via the toggle
+        if (useExternalStorageToggle.isOn)
+        {
+            savePath = Path.Combine(Application.persistentDataPath, "received_file"); // Use external storage path
+            Debug.Log("Using External Storage: " + savePath);
+        }
+        else
+        {
+            savePath = Path.Combine(Application.persistentDataPath, "received_file"); // Use persistent data path
+            Debug.Log("Using Persistent Data Path: " + savePath);
+        }
+    }
+
     public void ConnectToServer()
     {
         // Read the IP address from the input field
@@ -64,6 +78,8 @@ public class FileReceiver : MonoBehaviour
             uiManager.UpdateStatus("Please enter a valid IP address.");
             return;
         }
+
+        SetSavePath(); // Update the save path based on user's storage choice
 
         StartCoroutine(ClientCoroutine()); // Start the client coroutine to connect to the server
     }
