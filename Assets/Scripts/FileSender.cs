@@ -4,31 +4,31 @@ using System.Net;
 using System.Net.Sockets;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections.Generic;
 
 public class FileSender : MonoBehaviour
 {
     public int port = 8888; // Port for the TCP server
-    public string filePath = ""; // Path of the file to send
+    public string filePath; // To hold a single file path
+    public List<string> filePaths = new List<string>(); // To hold multiple file paths
     public UIManager uiManager; // Reference to UIManager to update progress
     public Text ipText;
-    
+
     private TcpListener server; // TCP server for listening to incoming connections
     private bool isServerRunning = false; // Whether the server is running or not
-    
+
     void Start()
     {
         // Get the local IP address and update the IPText UI element
         string localIP = GetLocalIPAddress();
         ipText.text = "Server IP: " + localIP; // Display the IP on the UI
-
-        // Set default value in IP input field (optional, if you want to show the local IP initially)
     }
 
     private void OnApplicationQuit()
     {
         StopServer(); // Stop the server when the application is closed
     }
-    
+
     public string GetLocalIPAddress()
     {
         string localIP = string.Empty;
@@ -50,11 +50,12 @@ public class FileSender : MonoBehaviour
         return localIP;
     }
 
+    // Method to start the server
     public void StartServer()
     {
-        if (string.IsNullOrEmpty(filePath))
+        if (filePaths.Count == 0 && string.IsNullOrEmpty(filePath))
         {
-            Debug.LogError("File path is empty.");
+            Debug.LogError("No files to send.");
             return;
         }
         StartCoroutine(ServerCoroutine()); // Start the server on a coroutine
@@ -67,6 +68,21 @@ public class FileSender : MonoBehaviour
         isServerRunning = true;
         uiManager.UpdateStatus("Waiting for receiver...");
 
+        long totalFileSize = 0;
+        // Calculate the total file size (if multiple files selected)
+        foreach (var filePath in filePaths)
+        {
+            totalFileSize += new FileInfo(filePath).Length;
+        }
+
+        // If a single file is selected
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            filePaths.Add(filePath); // Add single file to the list for uniform processing
+        }
+
+        long bytesSentTotal = 0; // Track total bytes sent for all files
+
         while (isServerRunning)
         {
             if (server.Pending()) // Check if a client is attempting to connect
@@ -74,28 +90,42 @@ public class FileSender : MonoBehaviour
                 TcpClient client = server.AcceptTcpClient(); // Accept incoming client connection
                 NetworkStream stream = client.GetStream(); // Create a network stream to send data
 
-                byte[] fileData = File.ReadAllBytes(filePath); // Read the entire file into a byte array
-                int fileSize = fileData.Length; // Get the file size
-
-                // Send file size first (4 bytes)
-                byte[] fileSizeBytes = System.BitConverter.GetBytes(fileSize);
-                stream.Write(fileSizeBytes, 0, fileSizeBytes.Length);
-
-                int bufferSize = 1024 * 4; // 4KB buffer for sending data
-                int bytesSent = 0;
-
-                // Send the file data in chunks
-                while (bytesSent < fileSize)
+                // Loop through all selected files
+                foreach (var file in filePaths)
                 {
-                    int bytesToSend = Mathf.Min(bufferSize, fileSize - bytesSent); // Send the remaining bytes
-                    stream.Write(fileData, bytesSent, bytesToSend);
-                    bytesSent += bytesToSend;
+                    if (!File.Exists(file))
+                    {
+                        Debug.LogError("File does not exist: " + file);
+                        continue;
+                    }
 
-                    float progress = (float)bytesSent / fileSize; // Calculate the progress
-                    uiManager.UpdateProgress(progress); // Update the UI with the progress
+                    byte[] fileData = File.ReadAllBytes(file); // Read the entire file into a byte array
+                    int fileSize = fileData.Length; // Get the file size
+
+                    // Send file size first (4 bytes)
+                    byte[] fileSizeBytes = System.BitConverter.GetBytes(fileSize);
+                    stream.Write(fileSizeBytes, 0, fileSizeBytes.Length);
+
+                    int bufferSize = 1024 * 4; // 4KB buffer for sending data
+                    int bytesSent = 0;
+
+                    // Send the file data in chunks
+                    while (bytesSent < fileSize)
+                    {
+                        int bytesToSend = Mathf.Min(bufferSize, fileSize - bytesSent); // Send the remaining bytes
+                        stream.Write(fileData, bytesSent, bytesToSend);
+                        bytesSent += bytesToSend;
+
+                        bytesSentTotal += bytesToSend; // Update total bytes sent
+                        float totalProgress = (float)bytesSentTotal / totalFileSize; // Calculate the overall progress
+                        uiManager.UpdateProgress(totalProgress); // Update the UI with the total progress
+                    }
+
+                    // Update status for each file sent
+                    uiManager.UpdateStatus("File sent: " + System.IO.Path.GetFileName(file));
                 }
 
-                uiManager.UpdateStatus("File sent successfully!"); // Update UI with success message
+                uiManager.UpdateStatus("All files sent successfully!"); // Update UI with success message
                 client.Close(); // Close the client connection
                 StopServer(); // Stop the server after the file is sent
             }
